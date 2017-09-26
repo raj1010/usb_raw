@@ -1,0 +1,26 @@
+                
+
+
+
+
+// Portion 1  from void HandleSetup0Data(const Enumeration *Request)
+
+                case INTERFACE_DESC_TYPE:
+                    FUSART_Send(USART1 , '4');
+                    Request->RequestFound=true;
+                break;
+    
+                case ENDPOINT_DESC_TYPE:
+                    FUSART_Send(USART1 , '5');
+                    Request->RequestFound=true;
+                break;
+    
+                case DEVICE_QUALIFIER_TYPE:
+                    _SetEPTxStatus(ENDP0,EP_TX_STALL);
+                    FUSART_Send(USART1 , '6');
+                    Request->RequestFound=true;
+                break;
+                
+
+
+// Portion 2
