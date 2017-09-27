@@ -99,9 +99,9 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 	uint16_t wIstr = _GetISTR();
 	if (wIstr & ISTR_RESET)
  	{
-	_SetISTR((uint16_t)CLR_RESET);
-	USBReset();
-    FUSART_Send(USART1 , '0');
+    	_SetISTR((uint16_t)CLR_RESET);
+	    USBReset();
+        FUSART_Send(USART1 , '0');
 	}
     else if (wIstr & ISTR_CTR)
     {
@@ -147,6 +147,16 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 uint8_t flag=0;
 uint16_t SaveRState,SaveTState, reg;
 
+void StoreSetupRequest(struct Request *stReq)
+{
+    uint8_t *Pointer = PMAAddr + (uint8_t *)(_GetEPRxAddr(ENDP0) * 2); /* *2 for 32 bits addr */
+    stReq->bmRequestType = *Pointer++;
+    stReq->bRequest      = *Pointer++; 
+    stReq->wValue        = (*((uint16_t *)(Pointer+2))); /* wValue */
+    stReq->wIndex        = (*((uint16_t *)(Pointer+6))); /* wIndex */
+    stReq->wLength       = (*((uint16_t *)(Pointer+10))); /* wLength */
+}
+
 void EndPointZeroHandle(void)
 {
 
@@ -162,25 +172,24 @@ void EndPointZeroHandle(void)
     }
     else if(reg & EP_SETUP) // If setup bit is high do parsing and data storing
     {
+
         _ClearEP_CTR_RX(ENDP0);
+
         stEnumeration.enControlState = SETTING_UP;
         stEnumeration.enRequestState  = NOTFOUND;
-        uint8_t *Pointer = PMAAddr + (uint8_t *)(_GetEPRxAddr(ENDP0) * 2); /* *2 for 32 bits addr */
-        stEnumeration.bmRequestType = *Pointer++;
-        stEnumeration.bRequest      = *Pointer++; 
-        stEnumeration.wValue        = (*((uint16_t *)(Pointer+2))); /* wValue */
-        stEnumeration.wIndex        = (*((uint16_t *)(Pointer+6))); /* wIndex */
-        stEnumeration.wLength       = (*((uint16_t *)(Pointer+10))); /* wLength */  
+        
+        StoreSetupRequest(&stRequest);  
+        
         FUSART_Send(USART1,'\r');
         FUSART_Send(USART1,'\n');
-        vPrintRequest();
-        if (stEnumeration.wLength == 0)
+        vPrintRequest(&stRequest);
+        if (stRequest.wLength == 0)
         {
-            HandleSetup0NoData();
+            HandleSetup0NoData(&stRequest);
         }
         else
         {
-            HandleSetup0Data();
+            HandleSetup0Data(&stRequest);
         }
     }
     else if (reg & EP_CTR_RX)
@@ -199,51 +208,47 @@ void EndPointZeroHandle(void)
 #define MAX_PACKET_SIZE          (0x40) //64
 
 
-
-
-
-
-void vPrintRequest(void)
+void vPrintRequest(struct Request *stReq)
 {
-    PrintHex(stEnumeration.bmRequestType );
-    PrintHex(stEnumeration.bRequest      );
-    PrintHex(((stEnumeration.wValue&0xff00)>>8));
-    PrintHex(((stEnumeration.wValue&0x00ff)));
-    PrintHex(((stEnumeration.wIndex&0xff00)>>8));
-    PrintHex(((stEnumeration.wIndex&0x00ff)));
-    PrintHex(((stEnumeration.wLength&0xff00)>>8));
-    PrintHex(((stEnumeration.wLength&0x00ff)));
+    PrintHex(stReq->bmRequestType );
+    PrintHex(stReq->bRequest      );
+    PrintHex(((stReq->wValue&0xff00)>>8));
+    PrintHex(((stReq->wValue&0x00ff)));
+    PrintHex(((stReq->wIndex&0xff00)>>8));
+    PrintHex(((stReq->wIndex&0x00ff)));
+    PrintHex(((stReq->wLength&0xff00)>>8));
+    PrintHex(((stReq->wLength&0x00ff)));
     FUSART_Send(USART1 , ' ');
 }
 
 
-void HandleSetup0NoData(void) // address request etc  // ye sari in ka wait krengi
+void HandleSetup0NoData(struct Request *stReq) // address request etc  // ye sari in ka wait krengi
 {
-    if ((stEnumeration.bmRequestType & BMREQUESTTYPE_TYPE_BITS) == 0x00) // standard requests 
+    if ((stReq->bmRequestType & BMREQUESTTYPE_TYPE_BITS) == 0x00) // standard requests 
     {       
-        if(stEnumeration.bRequest == SET_ADDRESS)
+        if(stReq->bRequest == SET_ADDRESS)
         {
             stEnumeration.enRequestState=SUPPORTED;
             FUSART_Send(USART1 , 'a');
         }
-        else if (stEnumeration.bRequest == CLEAR_FEATURE)
+        else if (stReq->bRequest == CLEAR_FEATURE)
         {
             FUSART_Send(USART1 , 'b');
             stEnumeration.enRequestState=SUPPORTED;
         }
-        else if(stEnumeration.bRequest == SET_CONFIGURATION)
+        else if(stReq->bRequest == SET_CONFIGURATION)
         {
             stEnumeration.unCurrentConfiguration = stEnumeration.wValue;
             stEnumeration.enDeviceState  = CONFIGURED;         
             stEnumeration.enRequestState = SUPPORTED;      
             FUSART_Send(USART1 , 'c');
         }
-        else if(stEnumeration.bRequest == SET_FEATURE)
+        else if(stReq->bRequest == SET_FEATURE)
         {
             FUSART_Send(USART1 , 'd');
             stEnumeration.enRequestState=SUPPORTED;
         }
-        else if(stEnumeration.bRequest == SET_INTERFACE)
+        else if(stReq->bRequest == SET_INTERFACE)
         {
             FUSART_Send(USART1 , 'e');
             stEnumeration.enRequestState=SUPPORTED;
@@ -276,18 +281,18 @@ void HandleSetup0NoData(void) // address request etc  // ye sari in ka wait kren
 Device specific requests can also come in standard request form
 
 */
-void HandleSetup0Data(void)
+void HandleSetup0Data(struct Request *stReq)
 {
 
-    if ((stEnumeration.bmRequestType & BMREQUESTTYPE_TYPE_BITS) == 0x00) // standard requests
+    if ((stReq->bmRequestType & BMREQUESTTYPE_TYPE_BITS) == 0x00) // standard requests
     {
-        if((stEnumeration.bRequest == GET_CONFIGURATION) && (stEnumeration.enDeviceState >= ADDRESSED) \
-            &&(stEnumeration.wValue == 0)&&(stEnumeration.wIndex == 0)&&(stEnumeration.wLength == 1)&&(stEnumeration.bmRequestType == 0x80))
+        if((stReq->bRequest == GET_CONFIGURATION) && (stEnumeration.enDeviceState >= ADDRESSED) \
+            &&(stReq->wValue == 0)&&(stReq->wIndex == 0)&&(stReq->wLength == 1)&&(stReq->bmRequestType == 0x80))
         {
             (void) GetConfiguration(&stEnumeration);
             FUSART_Send(USART1 , 'h');
         }
-        else if((stEnumeration.bRequest == GET_DESCRIPTOR))
+        else if((stReq->bRequest == GET_DESCRIPTOR))
         {
             stEnumeration.udTotalSizePresent=0;
             switch(((stEnumeration.wValue&0xFF00)>>8))
@@ -317,25 +322,25 @@ void HandleSetup0Data(void)
                 break;
             }
         }
-        else if((stEnumeration.bRequest == GET_INTERFACE) && (stEnumeration.enDeviceState == CONFIGURED) \
-            &&(stEnumeration.wValue == 0)&&(stEnumeration.wLength == 1)&&(stEnumeration.bmRequestType == 0x81))
+        else if((stReq->bRequest == GET_INTERFACE) && (stEnumeration.enDeviceState == CONFIGURED) \
+            &&(stReq->wValue == 0)&&(stReq->wLength == 1)&&(stReq->bmRequestType == 0x81))
         {
             stEnumeration.unpData = (uint8_t *)(&(stEnumeration.unCurrentAlternateSetting));
             stEnumeration.udTotalSizePresent = 1;
             stEnumeration.enRequestState=SUPPORTED;
             FUSART_Send(USART1 , 'l');
         }
-        else if(stEnumeration.bRequest == GET_STATUS && stEnumeration.wValue==0 && stEnumeration.wLength == 2)
+        else if(stReq->bRequest == GET_STATUS && stReq->wValue==0 && stReq->wLength == 2)
         {
             (void)StandardGetStatus(&stEnumeration);
             FUSART_Send(USART1 , 'm');    
         }
-        else if(stEnumeration.bRequest == SET_DESCRIPTOR)// isme data out aa skta he
+        else if(stReq->bRequest == SET_DESCRIPTOR)// isme data out aa skta he
         {
             FUSART_Send(USART1 , 'n');
             stEnumeration.enRequestState=UNSUPPORTED; // so to set tx stall to show not supported
         }
-        else if(stEnumeration.bRequest == SYNC_FRAME)
+        else if(stReq->bRequest == SYNC_FRAME)
         {
             FUSART_Send(USART1 , 'o');
             stEnumeration.enRequestState=UNSUPPORTED;
@@ -382,31 +387,31 @@ void HandleSetup0Data(void)
 
 
 
-void vIN0Proecess(void)
+void vIN0Proecess(struct Request *stReq)
 {
     if ( stEnumeration.enControlState == WAIT_STATUS_IN )
     {
-        if(stEnumeration.bRequest == SET_ADDRESS)
+        if(stReq->bRequest == SET_ADDRESS)
         {
             SetDeviceAddress(stEnumeration.wValue);
             stEnumeration.enDeviceState = ADDRESSED;
             stEnumeration.enControlState=WAIT_SETUP;
         }
-        else if (stEnumeration.bRequest == CLEAR_FEATURE)
+        else if (stReq->bRequest == CLEAR_FEATURE)
         {
             FUSART_Send(USART1 , 's');
             stEnumeration.enControlState=WAIT_SETUP;
         }
-        else if(stEnumeration.bRequest == SET_CONFIGURATION)
+        else if(stReq->bRequest == SET_CONFIGURATION)
         {
             stEnumeration.enControlState=WAIT_SETUP;
         }
-        else if(stEnumeration.bRequest == SET_FEATURE)
+        else if(stReq->bRequest == SET_FEATURE)
         {
             FUSART_Send(USART1 , 't');
             stEnumeration.enControlState=WAIT_SETUP;
         }
-        else if(stEnumeration.bRequest == SET_INTERFACE)
+        else if(stReq->bRequest == SET_INTERFACE)
         {
             FUSART_Send(USART1 , 'u');
             stEnumeration.enControlState=WAIT_SETUP;
