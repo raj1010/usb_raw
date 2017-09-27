@@ -85,14 +85,19 @@ enum DeviceState
 }
   
 
-struct Enumeration
+struct Request
 {
   uint8_t bmRequestType;
   uint8_t bRequest;
   uint16_t wValue;
   uint16_t wIndex;
   uint16_t wLength;
+};
 
+extern struct Request stRequest;
+
+struct Enumeration
+{
   uint8_t unCurrentFeature; 
   uint8_t unCurrentConfiguration;    /* Selected configuration */
   uint8_t unCurrentInterface;        /* Selected interface of current configuration */

@@ -12,6 +12,8 @@ extern uint8_t Prev;
 #define FALSE   0
 
 struct Enumeration stEnumeration; // hold all enumeration related data ok!!
+struct Request 	   stRequest;
+
 uint16_t address=0;
 #define vSetEPRxStatus(st) (SaveRState = st)
 #define vSetEPTxStatus(st) (SaveTState = st)
