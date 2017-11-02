@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-
+void itoa(int val, char *strng, int base);
 
 uint8_t FUsart_Clock_Enable( USART_TypeDef* USARTx)
 {

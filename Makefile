@@ -1,4 +1,10 @@
 
+#
+# There is a bugg in the system still 
+# you need to make every C file depend on all the header files ok!!
+# or process the header file dependency of a c file and make it depend on it
+#
+
 STM_COMMON=./resources
 
 OPENOCD_BOARD_DIR=/usr/share/openocd/scripts/board
@@ -10,8 +16,7 @@ SRCS += $(STM_COMMON)/STM32F30x_StdPeriph_Driver/src/stm32f30x_misc.c
 SRCS += $(STM_COMMON)/STM32_USB-FS-Device_Driver/src/usb_regs.c
 SRCS += $(STM_COMMON)/STM32_USB-FS-Device_Driver/src/usb_mem.c
 
-
-PROJ_NAME=usart
+PROJ_NAME=output
 
 #######################################################################################
 
@@ -32,24 +37,19 @@ CFLAGS += -I$(STM_COMMON)/STM32_USB-FS-Device_Driver/inc
 #CFLAGS += -I/usr/arm-none-eabi/include/
 CFLAGS += -include stm32f30x_conf.h    # it contails assert macro thats why we include it in every file with -include directive
 
-
 LDFLAGS = -Wl,--gc-sections -Wl,-Map=$(PROJ_NAME).map
 
-
 ST=$(STM_COMMON)/startup/startup_stm32f30x.s
-STOB = $(ST:.s=.o)
-# add startup file to build
-
 OBJS = $(SRCS:.c=.o)
-
+OBJS += $(ST:.s=.o)
 
 .PHONY: all
 all: $(PROJ_NAME).elf
 
-$(PROJ_NAME).elf: $(OBJS) startup_stm32f30x.o	
+$(PROJ_NAME).elf: $(OBJS)	
 	@rm -rf ./output/
 	@mkdir output	
-	@$(CC) $(CFLAGS) $(LDFLAGS) -T$(STM_COMMON)/linker_scripts/STM32_FLASH.ld  $(OBJS) startup_stm32f30x.o -o $@
+	@$(CC) $(CFLAGS) $(LDFLAGS) -T$(STM_COMMON)/linker_scripts/STM32_FLASH.ld  $(OBJS) -o $@
 	rm @rm -f *.o $(OBJS) startup_stm32f30x.o $(PROJ_NAME).map
 	$(info [003]  Linking done )	
 	@$(OBJCOPY) -O ihex $(PROJ_NAME).elf $(PROJ_NAME).hex	
@@ -60,12 +60,12 @@ $(PROJ_NAME).elf: $(OBJS) startup_stm32f30x.o
 	@$(SIZE) $(PROJ_NAME).elf
 	@mv $(PROJ_NAME).hex $(PROJ_NAME).bin $(PROJ_NAME).elf ./output/
 
-OBJS/%.o: SRCS/%.c
-	$(CC) $(CFLAGS) -c $^ -o $@
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 	
-startup_stm32f30x.o: $(ST)
+%.o: %.s
 	$(info [001]  Object Files Created)
-	@$(CC) $(CFLAGS) -c $(ST) -o $@ 
+	@$(CC) $(CFLAGS) -c $< -o $@ 
 	$(info [002]  Startup.o File Created)
 
 program: 
@@ -87,8 +87,3 @@ run:
 clean: 
 	@rm -f ./output/*.o ./output/$(PROJ_NAME).elf ./output/$(PROJ_NAME).hex ./output/$(PROJ_NAME).bin $(OBJS)
 	$(info [001]  Done cleaning)
-
-
-
-
-
